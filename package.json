@@ -1,0 +1,36 @@
+{
+  "name": "ethereum-tools",
+  "version": "0.1.0",
+  "keywords": [
+    "ethereum",
+    "sdk",
+    "transaction",
+    "help",
+    "BlockChain"
+  ],
+  "description": "Tools for Ethereum-like",
+  "author": "gao.gaoshuang@gmail.com",
+  "license": "MIT",
+  "main": "index.js",
+  "homepage": "https://github.com/gao623/ethereumTools#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gao623/ethereumTools.git"
+  },
+  "bugs": {
+    "url": "https://github.com/gao623/ethereumTools/issues"
+  },
+  "directories": {
+    "doc": "docs",
+    "test": "test"
+  },
+  "scripts": {
+    "test": "mocha --timeout 600000 test/autoTestCases.js -c"
+  },
+  "dependencies": {
+    "@truffle/hdwallet-provider": "^1.7.0",
+    "promisefy-util": "^1.2.0",
+    "web3": "^1.6.1"
+  },
+  "devDependencies": {}
+}
