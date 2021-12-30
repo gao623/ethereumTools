@@ -1,1 +1,1 @@
-module.exports = {...require("./chain"), ...require("./trans")};
+module.exports = {...require("./chain"), ...require("./trans"), ...require("./receipt")};
