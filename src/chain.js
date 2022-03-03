@@ -39,6 +39,24 @@ class Chain {
         return eventHash ? Chain.hexWith0x(eventHash) : eventHash;
     }
 
+    static parseEventSignatures(abi) {
+        return abi.filter(json => json.type === 'event').map(json => {
+            return {
+                event: json.name,
+                signature: web3EthAbi.encodeEventSignature(json)
+            };
+        });
+    }
+
+    static parseFuncSignatures(abi) {
+        return abi.filter(json => json.type === 'function').map(json => {
+            return {
+                function: json.name,
+                signature: web3EthAbi.encodeFunctionSignature({name: json.name, type: json.type, inputs: json.inputs})
+            };
+        });
+    }
+
     getContract(abi, contractAddr) {
         let conInstance = new Web3Contract(abi, contractAddr);
         conInstance.setProvider(this.web3.currentProvider);
