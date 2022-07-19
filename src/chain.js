@@ -57,9 +57,10 @@ class Chain {
         });
     }
 
-    getContract(abi, contractAddr) {
+    static getContract(abi, contractAddr, currentProvider) {
         let conInstance = new Web3Contract(abi, contractAddr);
-        conInstance.setProvider(this.web3.currentProvider);
+        conInstance.setProvider(currentProvider);
+        // conInstance.setProvider(this.web3.currentProvider);
         return conInstance;
     }
 
@@ -90,6 +91,10 @@ class Chain {
             address: address
         };
         return await this.web3.eth.getPastLogs(filter);
+    }
+
+    currentProvider() {
+        return this.web3.currentProvider;
     }
 }
 
