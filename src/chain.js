@@ -1,15 +1,27 @@
-const HDWalletProvider = require('@truffle/hdwallet-provider');
+// const HDWalletProvider = require('@truffle/hdwallet-provider');
 const Web3Contract = require('web3-eth-contract');
 const web3EthAbi = require("web3-eth-abi");
 const Web3 = require('web3');
+const ethers = require("ethers");
 const pu = require('promisefy-util');
 
 class Chain {
     constructor(nodeUrl, privateKeys = []) {
-        this.provider = new HDWalletProvider({
-            privateKeys: privateKeys,
-            providerOrUrl: nodeUrl,
-        });
+        this.provider = new Web3.providers.HttpProvider(nodeUrl);
+        // this.provider = new ethers.providers.JsonRpcProvider(nodeUrl);
+        this.wallets = privateKeys.map(prvKey => {
+            const wallet = new ethers.Wallet(prvKey);
+            const address = wallet.address.toLowerCase();
+            console.log("address:", address);
+            return {address: address, wallet: wallet};
+        }).reduce((reduced, next) => {
+            reduced[next.address] = next.wallet;
+            return reduced;
+        }, {});
+        // this.provider = new HDWalletProvider({
+        //     privateKeys: privateKeys,
+        //     providerOrUrl: nodeUrl,
+        // });
         this.web3 = new Web3(this.provider);
     }
 
@@ -90,11 +102,34 @@ class Chain {
             topics: topics,
             address: address
         };
+        // console.log("getPastLogs:", filter);
         return await this.web3.eth.getPastLogs(filter);
     }
 
     currentProvider() {
         return this.web3.currentProvider;
+    }
+
+    signTransaction(tx, privateKeyOrAddress) {
+        if (ethers.utils.isAddress(privateKeyOrAddress)) {
+            return this.wallets[privateKeyOrAddress.toLowerCase()].signTransaction(tx);
+        } else {
+            const wallet = new ethers.Wallet(privateKeyOrAddress);
+            return wallet.signTransaction(tx);
+        }
+    }
+
+    serializeTransaction(txObj) {
+        return ethers.utils.serializeTransaction(txObj);
+    }
+
+    sendRawTransaction(signedTx) {
+        return new Promise((resolve, reject) => {
+            this.web3.eth.sendSignedTransaction(signedTx)
+                .on('transactionHash', (hash) => resolve(hash))
+                .on('error', (err) => reject(err))
+            ;
+        });
     }
 }
 
