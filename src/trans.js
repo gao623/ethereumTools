@@ -1,14 +1,8 @@
 const EthInputDataDecoder = require('ethereum-input-data-decoder');
 const ethers = require("ethers");
-const { WanChainLegacyTransaction } = require("./wanchain-tx");
+const Transaction = require("./wanchain-tx");
 
-class TxInputDataDecoder {
-    constructor(abi) {
-        this.decoder = new EthInputDataDecoder(abi);
-        this.toHexKeywords = ['byte', 'int'];
-        this.toArrayKeyword = '[]';
-    }
-
+class TxHelper {
     static hexStrip0x(str) {
         return str.replace(/^0x/, '');
     }
@@ -18,6 +12,23 @@ class TxInputDataDecoder {
             return `0x${hexStr}`;
         }
         return hexStr;
+    }
+
+    static defineProperty(obj, property) {
+        let value;
+        Object.defineProperty(obj, property, {
+            get: ()  => value,
+            set: val => value = val,
+            enumerable: true
+        });
+    }
+}
+
+class TxInputDataDecoder {
+    constructor(abi) {
+        this.decoder = new EthInputDataDecoder(abi);
+        this.toHexKeywords = ['byte', 'int'];
+        this.toArrayKeyword = '[]';
     }
 
     decode(data) {
@@ -33,9 +44,9 @@ class TxInputDataDecoder {
             });
             if (needConvert) {
                 if (type.indexOf(this.toArrayKeyword) >= 0) {
-                    result.args[name] = inputData.map(data => TxInputDataDecoder.hexWith0x(data.toString("hex")));
+                    result.args[name] = inputData.map(data => TxHelper.hexWith0x(data.toString("hex")));
                 } else {
-                    result.args[name] = TxInputDataDecoder.hexWith0x(inputData.toString("hex"));
+                    result.args[name] = TxHelper.hexWith0x(inputData.toString("hex"));
                 }
             } else {
                 result.args[name] = inputData;
@@ -50,17 +61,6 @@ class Web3TxRawDataDecoder {
         this.log = log;
     }
     static chainType = "ETH"
-
-    static hexStrip0x(str) {
-        return str.replace(/^0x/, '');
-    }
-
-    static hexWith0x(hexStr) {
-        if(0 > hexStr.indexOf('0x')){
-            return `0x${hexStr}`;
-        }
-        return hexStr;
-    }
 
     static parseBufToInt(buf) {
       return parseInt(buf.toString('hex'), 16);
@@ -89,24 +89,28 @@ class WanTxRawDataDecoder extends Web3TxRawDataDecoder {
     static chainType = "WAN"
 
     decode(data) {
-        let result;
-
         const payload = ethers.utils.arrayify(data);
-        const rlpDecodedData = ethers.utils.RLP.decode(data)
 
-        if (payload[0] === 0xffffffff) {
-            // wanchain jupiter transaction
-            result = super.decode(ethers.utils.RLP.encode(rlpDecodedData.slice(1)));
-        } else if (payload[0] > 0x7f && rlpDecodedData.length === 10) {
-            // wanchain legacy transaction
-            const wanTx = WanChainLegacyTransaction.fromValuesArray(rlpDecodedData);
-            result = wanTx.toJSON();
-        } else {
+        if (payload[0] === ethers.utils.TransactionTypes.eip1559 || payload[0] === ethers.utils.TransactionTypes.eip2930) {
             // common ethereum-like transaction
-            result = super.decode(data);
+            return super.decode(data);
         }
 
-        return result;
+        const rlpDecodedData = ethers.utils.RLP.decode(payload);
+        if (ethers.BigNumber.from(rlpDecodedData[0]).eq(ethers.BigNumber.from("0xffffffff"))) {
+            // wanchain jupiter transaction
+            return super.decode(ethers.utils.RLP.encode(rlpDecodedData.slice(1)));
+        }
+
+        if (payload[0] > 0x7f && rlpDecodedData.length === 10) {
+            // wanchain legacy transaction
+            const wanTx = Transaction.WanChainLegacyTransaction.fromValuesArray(rlpDecodedData);
+            return wanTx.toJSON();
+        }
+
+        // common ethereum-like legacy transaction
+        return super.decode(data);
+
     }
 }
 
@@ -149,7 +153,43 @@ class TxRawDataDecoder {
     }
 }
 
+class GenTransaction {
+    constructor() {
+        TxHelper.defineProperty(this, "to");
+        TxHelper.defineProperty(this, "nonce");
+        TxHelper.defineProperty(this, "gasLimit");
+        TxHelper.defineProperty(this, "gasPrice");
+        TxHelper.defineProperty(this, "chainId");
+        TxHelper.defineProperty(this, "value");
+        TxHelper.defineProperty(this, "type");
+        TxHelper.defineProperty(this, "accessList");
+        TxHelper.defineProperty(this, "maxPriorityFeePerGas");
+        TxHelper.defineProperty(this, "maxFeePerGas");
+    }
+
+    toJSON() {
+        return {
+            chainId: this.chainId,
+            nonce: this.nonce !== undefined ? ethers.BigNumber.from(this.nonce).toHexString() : this.nonce,
+            gasPrice: this.gasPrice !== undefined ? ethers.BigNumber.from(this.gasPrice).toHexString() : this.gasPrice,
+            maxPriorityFeePerGas: this.maxPriorityFeePerGas !== undefined ? ethers.BigNumber.from(this.maxPriorityFeePerGas).toHexString() : this.maxPriorityFeePerGas,
+            maxFeePerGas: this.maxFeePerGas !== undefined ? ethers.BigNumber.from(this.maxFeePerGas).toHexString() : this.maxFeePerGas,
+            gasLimit: this.gasLimit !== undefined ? ethers.BigNumber.from(this.gasLimit).toHexString() : this.gasLimit,
+            to: this.to,
+            value: this.value !== undefined ? ethers.BigNumber.from(this.value).toHexString() : this.value,
+            data: TxHelper.hexWith0x(this.data.toString('hex')),
+            accessList: this.accessList,
+            type: this.type,
+            v: this.v,
+            r: this.r,
+            s: this.s,
+        };
+    }
+};
+
 exports.TxInputDataDecoder = TxInputDataDecoder;
 exports.Web3TxRawDataDecoder = Web3TxRawDataDecoder;
 exports.WanTxRawDataDecoder = WanTxRawDataDecoder;
 exports.TxRawDataDecoder = TxRawDataDecoder;
+exports.Transaction = Transaction;
+exports.GenTransaction = GenTransaction;

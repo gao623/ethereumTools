@@ -1,4 +1,3 @@
-// const HDWalletProvider = require('@truffle/hdwallet-provider');
 const Web3Contract = require('web3-eth-contract');
 const web3EthAbi = require("web3-eth-abi");
 const Web3 = require('web3');
@@ -6,23 +5,9 @@ const ethers = require("ethers");
 const pu = require('promisefy-util');
 
 class Chain {
-    constructor(nodeUrl, privateKeys = []) {
-        this.provider = new Web3.providers.HttpProvider(nodeUrl);
-        // this.provider = new ethers.providers.JsonRpcProvider(nodeUrl);
-        this.wallets = privateKeys.map(prvKey => {
-            const wallet = new ethers.Wallet(prvKey);
-            const address = wallet.address.toLowerCase();
-            console.log("address:", address);
-            return {address: address, wallet: wallet};
-        }).reduce((reduced, next) => {
-            reduced[next.address] = next.wallet;
-            return reduced;
-        }, {});
-        // this.provider = new HDWalletProvider({
-        //     privateKeys: privateKeys,
-        //     providerOrUrl: nodeUrl,
-        // });
-        this.web3 = new Web3(this.provider);
+    constructor(nodeUrl) {
+        this.jsonRpcProvider = new ethers.providers.Web3Provider(new Web3.providers.HttpProvider(nodeUrl))
+        this.web3 = new Web3(this.jsonRpcProvider.provider);
     }
 
     static calcEventSignature(eventName, abi) {
@@ -46,6 +31,10 @@ class Chain {
         return hexStr;
     }
 
+    static parseAddress(publicKeyOrPrivateKey) {
+        return ethers.utils.computeAddress(Chain.hexWith0x(publicKeyOrPrivateKey));
+    }
+
     static getEventHash(eventName, contractAbi) {
         let eventHash = Chain.calcEventSignature(eventName, contractAbi);
         return eventHash ? Chain.hexWith0x(eventHash) : eventHash;
@@ -55,6 +44,7 @@ class Chain {
         return abi.filter(json => json.type === 'event').map(json => {
             return {
                 event: json.name,
+                inputs: json.inputs,
                 signature: web3EthAbi.encodeEventSignature(json)
             };
         });
@@ -64,9 +54,48 @@ class Chain {
         return abi.filter(json => json.type === 'function').map(json => {
             return {
                 function: json.name,
+                inputs: json.inputs,
                 signature: web3EthAbi.encodeFunctionSignature({name: json.name, type: json.type, inputs: json.inputs})
             };
         });
+    }
+
+    static parseEventSignatures(abi) {
+        return abi.filter(json => json.type === 'event').map(json => {
+            return {
+                event: json.name,
+                inputs: json.inputs,
+                signature: web3EthAbi.encodeEventSignature(json)
+            };
+        });
+    }
+
+    static parseAbiSignatures(abi) {
+        return abi.reduce((reduced, next) => {
+            let signature;
+            if (next.type === 'function') {
+                // signature = web3EthAbi.encodeFunctionSignature({name: next.name, type: next.type, inputs: next.inputs})
+                signature = web3EthAbi.encodeFunctionSignature(next)
+            } else if (next.type === 'event') {
+                // signature = web3EthAbi.encodeEventSignature({name: next.name, type: next.type, inputs: next.inputs})
+                signature = web3EthAbi.encodeEventSignature(next)
+            }
+            if (!reduced[next.type]) {
+                reduced[next.type] = {};
+            }
+            if (!reduced[next.type][signature]) {
+                reduced[next.type][signature] = {};
+            }
+            reduced[next.type][signature][next.type] = next.name.trim();
+            reduced[next.type][signature].inputs = next.inputs;
+            reduced[next.type][signature].format = `${reduced[next.type][signature][next.type]}(${next.inputs.map(input => input.type).join(",")})`;
+            if (!reduced[next.type][next.name]) {
+                reduced[next.type][next.name] = [];
+            }
+            reduced[next.type][next.name].push(signature);
+
+            return reduced;
+        }, {})
     }
 
     static getContract(abi, contractAddr, currentProvider) {
@@ -74,6 +103,37 @@ class Chain {
         conInstance.setProvider(currentProvider);
         // conInstance.setProvider(this.web3.currentProvider);
         return conInstance;
+    }
+
+    static serializeTransaction(txObj) {
+        return ethers.utils.serializeTransaction(txObj);
+    }
+
+    static sendRawTransaction(signedTx) {
+        return new Promise((resolve, reject) => {
+            this.web3.eth.sendSignedTransaction(signedTx)
+                .on('transactionHash', (hash) => resolve(hash))
+                .on('error', (err) => reject(err))
+            ;
+        });
+    }
+    static async signTransaction(tx, privateKe) {
+        const singer = new ethers.Wallet(privateKe);
+        return await singer.signTransaction(tx);
+    }
+
+    static async make(sc, func, ...info) {
+        if (info.length) {
+            return await sc.methods[func](...info).encodeABI();
+        }
+        return await sc.methods[func]().encodeABI();
+    }
+
+    static async call(sc, func, ...info) {
+        if (info.length) {
+            return await pu.promisefy(sc.methods[func](...info).call, [], sc.methods);
+        }
+        return await pu.promisefy(sc.methods[func]().call, [], sc.methods);
     }
 
     async make(sc, func, ...info) {
@@ -102,35 +162,37 @@ class Chain {
             topics: topics,
             address: address
         };
-        // console.log("getPastLogs:", filter);
         return await this.web3.eth.getPastLogs(filter);
+    }
+
+    async getFeeData() {
+        const [block, gasPrice] = await Promise.all([
+            this.web3.eth.getBlock("latest"),
+            ethers.BigNumber.from(await this.web3.eth.getGasPrice()).toHexString()
+        ]);
+
+        let maxFeePerGas = null
+        let maxPriorityFeePerGas = null;
+        if (block && block.baseFeePerGas) {
+            // We may want to compute this more accurately in the future,
+            // using the formula "check if the base fee is correct".
+            // See: https://eips.ethereum.org/EIPS/eip-1559
+            const maxPriorityFeePerGasBigNumber = ethers.BigNumber.from("1500000000");
+            maxFeePerGas = ethers.BigNumber.from(block.baseFeePerGas).mul(2).add(maxPriorityFeePerGasBigNumber).toHexString();
+            maxPriorityFeePerGas = maxPriorityFeePerGasBigNumber.toHexString();
+        }
+
+        return { maxFeePerGas, maxPriorityFeePerGas, gasPrice };
     }
 
     currentProvider() {
         return this.web3.currentProvider;
     }
 
-    signTransaction(tx, privateKeyOrAddress) {
-        if (ethers.utils.isAddress(privateKeyOrAddress)) {
-            return this.wallets[privateKeyOrAddress.toLowerCase()].signTransaction(tx);
-        } else {
-            const wallet = new ethers.Wallet(privateKeyOrAddress);
-            return wallet.signTransaction(tx);
-        }
+    async signTransaction(tx, privateKey) {
+        return (await this.web3.eth.accounts.signTransaction(tx, privateKey)).rawTransaction;
     }
 
-    serializeTransaction(txObj) {
-        return ethers.utils.serializeTransaction(txObj);
-    }
-
-    sendRawTransaction(signedTx) {
-        return new Promise((resolve, reject) => {
-            this.web3.eth.sendSignedTransaction(signedTx)
-                .on('transactionHash', (hash) => resolve(hash))
-                .on('error', (err) => reject(err))
-            ;
-        });
-    }
 }
 
 exports.Chain = Chain;
