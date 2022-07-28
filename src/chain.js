@@ -109,14 +109,6 @@ class Chain {
         return ethers.utils.serializeTransaction(txObj);
     }
 
-    static sendRawTransaction(signedTx) {
-        return new Promise((resolve, reject) => {
-            this.web3.eth.sendSignedTransaction(signedTx)
-                .on('transactionHash', (hash) => resolve(hash))
-                .on('error', (err) => reject(err))
-            ;
-        });
-    }
     static async signTransaction(tx, privateKe) {
         const singer = new ethers.Wallet(privateKe);
         return await singer.signTransaction(tx);
@@ -193,6 +185,14 @@ class Chain {
         return (await this.web3.eth.accounts.signTransaction(tx, privateKey)).rawTransaction;
     }
 
+    sendRawTransaction(signedTx) {
+        return new Promise((resolve, reject) => {
+            this.web3.eth.sendSignedTransaction(signedTx)
+                .on('transactionHash', (hash) => resolve(hash))
+                .on('error', (err) => reject(err))
+            ;
+        });
+    }
 }
 
 exports.Chain = Chain;
