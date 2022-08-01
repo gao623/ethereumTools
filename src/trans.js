@@ -97,7 +97,11 @@ class WanTxRawDataDecoder extends Web3TxRawDataDecoder {
         }
 
         const rlpDecodedData = ethers.utils.RLP.decode(payload);
-        if (ethers.BigNumber.from(rlpDecodedData[0]).eq(ethers.BigNumber.from("0xffffffff"))) {
+        let isWanchainJupiter = false;
+        try {
+            isWanchainJupiter = ethers.BigNumber.from(rlpDecodedData[0]).eq(ethers.BigNumber.from("0xffffffff"));
+        } catch {}
+        if (isWanchainJupiter) {
             // wanchain jupiter transaction
             return super.decode(ethers.utils.RLP.encode(rlpDecodedData.slice(1)));
         }
@@ -168,22 +172,24 @@ class GenTransaction {
     }
 
     toJSON() {
-        return {
-            chainId: this.chainId,
+        let json = {
             nonce: this.nonce !== undefined ? ethers.BigNumber.from(this.nonce).toHexString() : this.nonce,
-            gasPrice: this.gasPrice !== undefined ? ethers.BigNumber.from(this.gasPrice).toHexString() : this.gasPrice,
-            maxPriorityFeePerGas: this.maxPriorityFeePerGas !== undefined ? ethers.BigNumber.from(this.maxPriorityFeePerGas).toHexString() : this.maxPriorityFeePerGas,
-            maxFeePerGas: this.maxFeePerGas !== undefined ? ethers.BigNumber.from(this.maxFeePerGas).toHexString() : this.maxFeePerGas,
             gasLimit: this.gasLimit !== undefined ? ethers.BigNumber.from(this.gasLimit).toHexString() : this.gasLimit,
             to: this.to,
             value: this.value !== undefined ? ethers.BigNumber.from(this.value).toHexString() : this.value,
             data: TxHelper.hexWith0x(this.data.toString('hex')),
-            accessList: this.accessList,
-            type: this.type,
-            v: this.v,
-            r: this.r,
-            s: this.s,
         };
+        this.chainId !== undefined && (json.chainId = this.chainId);
+        this.gasPrice !== undefined && (json.gasPrice = ethers.BigNumber.from(this.gasPrice).toHexString());
+        this.maxPriorityFeePerGas !== undefined && (json.maxPriorityFeePerGas = ethers.BigNumber.from(this.maxPriorityFeePerGas).toHexString());
+        this.maxFeePerGas !== undefined && (json.maxFeePerGas = ethers.BigNumber.from(this.maxFeePerGas).toHexString());
+        this.type !== undefined && (json.type = Number(this.type));
+        this.v !== undefined && (json.v = this.v);
+        this.v !== undefined && (json.v = this.v);
+        this.r !== undefined && (json.r = this.r);
+        this.s !== undefined && (json.s = this.s);
+
+        return json;
     }
 };
 
