@@ -22,6 +22,12 @@ class TxHelper {
             enumerable: true
         });
     }
+    static transactionTypeDict = Object.values(ethers.utils.TransactionTypes).reduce((reduced, next) => {
+        if (typeof(next) === "string") {
+            reduced[next] = next;
+        }
+        return reduced;
+    }, {});
 }
 
 class TxInputDataDecoder {
