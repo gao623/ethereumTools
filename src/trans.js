@@ -199,6 +199,7 @@ class GenTransaction {
     }
 };
 
+exports.TransactionHelper = TxHelper;
 exports.TxInputDataDecoder = TxInputDataDecoder;
 exports.Web3TxRawDataDecoder = Web3TxRawDataDecoder;
 exports.WanTxRawDataDecoder = WanTxRawDataDecoder;
