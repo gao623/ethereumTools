@@ -5,8 +5,8 @@ const ethers = require("ethers");
 const pu = require('promisefy-util');
 
 class Chain {
-    constructor(nodeUrl) {
-        this.jsonRpcProvider = new ethers.providers.Web3Provider(new Web3.providers.HttpProvider(nodeUrl))
+    constructor(nodeUrl, options) {
+        this.jsonRpcProvider = new ethers.providers.Web3Provider(new Web3.providers.HttpProvider(nodeUrl, options));
         this.web3 = new Web3(this.jsonRpcProvider.provider);
     }
 
@@ -109,9 +109,15 @@ class Chain {
         return ethers.utils.serializeTransaction(txObj);
     }
 
-    static async signTransaction(tx, privateKe) {
-        const singer = new ethers.Wallet(privateKe);
+    static async signTransaction(tx, privateKey) {
+        const singer = new ethers.Wallet(privateKey);
         return await singer.signTransaction(tx);
+    }
+
+    static async sendRawTransaction(provider, tx, privateKey) {
+        const singer = new ethers.Wallet(privateKey, provider);
+        const signedTransaction = await singer.signTransaction(tx);
+        return await singer.sendTransaction(signedTransaction);
     }
 
     static async make(sc, func, ...info) {
