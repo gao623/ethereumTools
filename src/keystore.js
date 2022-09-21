@@ -1,4 +1,3 @@
-const fs = require("fs");
 const keythereum = require("keythereum");
 
 class Keystore {
@@ -11,17 +10,7 @@ class Keystore {
   static dump(password, privateKey, options) {
     return keythereum.dump(password, privateKey, Keystore.salt(), Keystore.iv(), options);
   }
-  static recover(password, path) {
-    let keystoreObj;
-    if (typeof(path) === "object") {
-      // keystore object
-      keystoreObj = path;
-    } else if (typeof(path) === "string") {
-      // keystore path
-      keystoreObj = JSON.parse(fs.readFileSync(path, "utf8"));
-    } else {
-      throw new Error("invalid keystore");
-    }
+  static recover(password, keystoreObj) {
     let keys = [];
     for (let k in keystoreObj) {
       if (k.startsWith("crypto" || "Crypto")) {
@@ -29,9 +18,6 @@ class Keystore {
       }
     }
     return keys.map(key => (keythereum.recover(password, key)).toString("hex"));
-  }
-  static saveAs(path, object) {
-    return fs.writeFileSync(path, JSON.stringify(object), {encoding: "utf8"});
   }
 }
 
