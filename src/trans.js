@@ -1,4 +1,4 @@
-const EthInputDataDecoder = require('ethereum-input-data-decoder');
+const web3EthAbi = require("web3-eth-abi");
 const ethers = require("ethers");
 const Transaction = require("./wanchain-tx");
 
@@ -22,43 +22,59 @@ class TxHelper {
             enumerable: true
         });
     }
+
     static transactionTypeDict = Object.values(ethers.utils.TransactionTypes).reduce((reduced, next) => {
         if (typeof(next) === "string") {
             reduced[next] = next;
         }
         return reduced;
     }, {});
+
+    static parseContractAbi(abi) {
+        return abi.reduce((reduced, json) => {
+            if (json.type === 'function') {
+                const signature = web3EthAbi.encodeFunctionSignature(json);
+                reduced.function[signature] = json;
+            } else if (json.type === 'event') {
+                const signature = web3EthAbi.encodeEventSignature(json);
+                reduced.event[signature] = json;
+            }
+            return reduced;
+        }, {function:{}, event:{}});
+    }
 }
 
 class TxInputDataDecoder {
     constructor(abi) {
-        this.decoder = new EthInputDataDecoder(abi);
         this.toHexKeywords = ['byte', 'int'];
         this.toArrayKeyword = '[]';
+        this.abiDict = TxHelper.parseContractAbi(abi);
     }
 
     decode(data) {
-        const input = this.decoder.decodeData(data);
-        let result = {method:input.method, types:input.types, args:{}};
-
-        for (let idx = 0; idx < input.names.length; ++idx) {
-            const name = input.names[idx];
-            const type = input.types[idx];
-            const inputData = input.inputs[idx];
-            const needConvert = this.toHexKeywords.some(keyword => {
-                return type.indexOf(keyword) >= 0;
-            });
-            if (needConvert) {
-                if (type.indexOf(this.toArrayKeyword) >= 0) {
-                    result.args[name] = inputData.map(data => TxHelper.hexWith0x(data.toString("hex")));
-                } else {
-                    result.args[name] = TxHelper.hexWith0x(inputData.toString("hex"));
-                }
+        const buffer = ethers.utils.arrayify(data);
+        const divideBuffer = buffer.reduce((reduced, data, index) => {
+            if (index < 4) {
+                reduced.signature.push(data);
             } else {
-                result.args[name] = inputData;
+                reduced.data.push(data)
             }
+            return reduced;
+        }, {signature: [], data: []})
+        const {signature: funcSignature, data: contractData} = Object.keys(divideBuffer).reduce((reduced, key) => {
+            reduced[key] = ethers.utils.hexlify(divideBuffer[key])
+            return reduced;
+        }, {});
+        if (!this.abiDict.function[funcSignature]) {
+            throw new Error("not found method");
         }
-        return result
+        const args = web3EthAbi.decodeParameters(this.abiDict.function[funcSignature].inputs, contractData);
+        const result = {
+            method: this.abiDict.function[funcSignature].name,
+            types: this.abiDict.function[funcSignature].inputs,
+            args: args,
+        }
+        return result;
     }
 }
 

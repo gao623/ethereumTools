@@ -27,14 +27,8 @@
   "scripts": {
     "test": "mocha --timeout 600000 test/autoTestCases.js -c"
   },
-  "browserslist": [
-    ">0.2%",
-    "not dead",
-    "not op_mini all"
-  ],
   "dependencies": {
     "@ethereumjs/tx": "^3.5.2",
-    "ethereum-input-data-decoder": "^0.3.5",
     "ethereumjs-util": "^7.1.5",
     "ethers": "5.6.9",
     "keythereum": "^1.2.0",
