@@ -48,6 +48,10 @@ class TxInputDataDecoder {
     constructor(abi) {
         this.toHexKeywords = ['byte', 'int'];
         this.toArrayKeyword = '[]';
+        abi && this.updateAbi(abi);
+    }
+
+    updateAbi(abi) {
         this.abiDict = TxHelper.parseContractAbi(abi);
     }
 
