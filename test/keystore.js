@@ -1,10 +1,12 @@
+const fs = require("fs");
 const { Keystore } = require("../src/");
 
 async function test(password, privateKey, options = {kdf: "scrypt"}) {
   let keystoreObj = await Keystore.dump(password, privateKey, options);
-  Keystore.saveAs(keystoreObj.address, keystoreObj);
+  fs.writeFileSync(`${keystoreObj.address}.json`, JSON.stringify(keystoreObj));
 
-  let prvKeyRecoverByFile = Keystore.recover(password, keystoreObj.address);
+  let keystoreContent = JSON.parse(fs.readFileSync(`${keystoreObj.address}.json`));
+  let prvKeyRecoverByFile = Keystore.recover(password, keystoreContent);
   if (privateKey.toString("hex") !== prvKeyRecoverByFile.toString("hex")) {
     throw new Error("invalid keystore")
   } else {
@@ -19,4 +21,5 @@ async function test(password, privateKey, options = {kdf: "scrypt"}) {
   }
 }
 
-test('test', process.env.privateKey);
+
+test('test', process.env.TestnetOwnerPK);
