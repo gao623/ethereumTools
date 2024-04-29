@@ -74,24 +74,26 @@ class Chain {
         return abi.reduce((reduced, next) => {
             let signature;
             if (next.type === 'function') {
-                // signature = web3EthAbi.encodeFunctionSignature({name: next.name, type: next.type, inputs: next.inputs})
                 signature = web3EthAbi.encodeFunctionSignature(next)
+                next.name || (next.name = next.type);
             } else if (next.type === 'event') {
-                // signature = web3EthAbi.encodeEventSignature({name: next.name, type: next.type, inputs: next.inputs})
                 signature = web3EthAbi.encodeEventSignature(next)
+            } else {
+                signature = web3EthAbi.encodeEventSignature(next)
+                next.name || (next.name = next.type);
             }
-            if (!reduced[next.type]) {
+            if (!reduced.hasOwnProperty(next.type)) {
                 reduced[next.type] = {};
             }
-            if (!reduced[next.type][signature]) {
+            if (!reduced[next.type].hasOwnProperty(signature)) {
                 reduced[next.type][signature] = {};
+            }
+            if (!reduced[next.type].hasOwnProperty(next.name)) {
+                reduced[next.type][next.name] = [];
             }
             reduced[next.type][signature][next.type] = next.name.trim();
             reduced[next.type][signature].inputs = next.inputs;
             reduced[next.type][signature].format = `${reduced[next.type][signature][next.type]}(${next.inputs.map(input => input.type).join(",")})`;
-            if (!reduced[next.type][next.name]) {
-                reduced[next.type][next.name] = [];
-            }
             reduced[next.type][next.name].push(signature);
 
             return reduced;
